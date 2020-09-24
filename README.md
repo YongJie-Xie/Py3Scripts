@@ -10,7 +10,12 @@ Python 3 Scripts
 ## 使用说明
 
 1. 日志操作类
+
    参考 logger_test.py 测试文件
+
+2. 数据库操作类
+
+   参考 database_test.py 测试文件
 
 ## 运行效果
 
