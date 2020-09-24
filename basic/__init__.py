@@ -11,9 +11,11 @@
 @Software    : PyCharm
 @Version     : 1.0
 """
+from basic.database import *
 from basic.logger import *
 
 __all__ = [
     'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL',
     'Logger', 'Log', 'logger', 'log',
+    'MySQLDatabase'
 ]
