@@ -7,7 +7,7 @@
 @Description : 日志操作类，支持控制台输出着色、文件输出、装饰器调用等。
 @FileName    : logger.py
 @License     : MIT License
-@ProjectName : Python3Scripts
+@ProjectName : Py3Scripts
 @Software    : PyCharm
 @Version     : 1.2
 """

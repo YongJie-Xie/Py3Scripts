@@ -7,7 +7,7 @@
 @Description : 计数器类，支持利用同步锁对数值进行顺序变更。
 @FileName    : counter.py
 @License     : MIT License
-@ProjectName : MyScripts
+@ProjectName : Py3Scripts
 @Software    : PyCharm
 @Version     : 1.0
 """
