@@ -11,11 +11,11 @@ Python 3 Scripts
 
 1. 日志操作类
 
-   参考 logger_test.py 测试文件
+   参考 test_logger.py 测试文件
 
 2. 数据库操作类
 
-   参考 database_test.py 测试文件
+   参考 test_database.py 测试文件
 
 ## 运行效果
 
