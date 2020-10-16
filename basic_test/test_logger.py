@@ -9,7 +9,7 @@
 @License     : MIT License
 @ProjectName : Py3Scripts
 @Software    : PyCharm
-@Version     : 1.0
+@Version     : 1.2
 """
 from basic import Logger, DEBUG
 

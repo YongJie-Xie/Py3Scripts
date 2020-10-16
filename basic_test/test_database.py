@@ -9,7 +9,7 @@
 @License     : MIT License
 @ProjectName : Py3Scripts
 @Software    : PyCharm
-@Version     : 1.0
+@Version     : 1.1
 """
 import MySQLdb
 from MySQLdb.cursors import SSCursor
