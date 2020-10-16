@@ -9,26 +9,15 @@
 @License     : MIT License
 @ProjectName : Py3Scripts
 @Software    : PyCharm
-@Version     : 1.0
+@Version     : 1.1
 """
 import contextlib
-import threading
 from typing import Union, List
 
-from basic.logger import Logger, DEBUG
+from basic.logger import Logger
 
 
 class MySQLDatabase:
-    _instance_lock = threading.Lock()
-
-    def __new__(cls, *args, **kwargs):
-        """利用内部锁实现的保证线程安全的单例设计模式，确保一个类只有一个实例存在"""
-        if not hasattr(MySQLDatabase, '_instance'):
-            with MySQLDatabase._instance_lock:
-                if not hasattr(MySQLDatabase, '_instance'):
-                    MySQLDatabase._instance = object.__new__(cls)
-        return MySQLDatabase._instance
-
     def __init__(
             self,
             creator: object,
@@ -105,7 +94,7 @@ class MySQLDatabase:
             日志对象
         """
         # 初始化日志对象
-        self._logger = logger or Logger('database', level=DEBUG, simplify=True)
+        self._logger = logger or Logger('MySQLDatabase')
 
         # 生成数据库配置
         if creator.__name__ == 'MySQLdb':
@@ -135,7 +124,8 @@ class MySQLDatabase:
 
         if multi_thread:
             # 用于数据库连接池 PooledDB
-            from DBUtils.PooledDB import PooledDB
+            # from DBUtils.PooledDB import PooledDB  # DBUtils 1.x
+            from dbutils.pooled_db import PooledDB  # DBUtils 2.x
             self._pool = PooledDB(
                 creator, min_cached, max_cached, max_shared, max_connections, blocking, max_usage, init_command_list,
                 reset,
@@ -143,7 +133,8 @@ class MySQLDatabase:
             )
         else:
             # 用于数据库连接池 PersistentDB
-            from DBUtils.PersistentDB import PersistentDB
+            # from DBUtils.PersistentDB import PersistentDB  # DBUtils 1.x
+            from dbutils.persistent_db import PersistentDB  # DBUtils 2.x
             self._pool = PersistentDB(
                 creator, max_usage, init_command_list,
                 **self._config, **kwargs
@@ -155,51 +146,62 @@ class MySQLDatabase:
         self._placeholder_plus = lambda x, sy='`%s`', sp=', ': (sp.join([sy] * len(x)) % x)  # '(1, 2)' -> '`%s`, `%s`'
 
     @contextlib.contextmanager
-    def execute(self, operation: str, *, params: Union[dict, tuple, list] = None, cursor_class: type = None) -> type:
-        self._logger.debug('Execute operation: {}'.format(operation))
-        self._logger.debug('Execute params: {}'.format(params))
+    def execute(
+            self, operation: str,
+            *,
+            params: Union[dict, tuple, list] = None, cursor_class: type = None,
+            stacklevel: int = 4
+    ) -> type:
+        self._logger.debug('Execute operation: {}'.format(operation), stacklevel=stacklevel)
+        self._logger.debug('Execute params: {}'.format(params), stacklevel=stacklevel)
         connect = self._pool.connection()
         cursor = connect.cursor(cursorclass=cursor_class)
         try:
             cursor.execute(operation, params)
             yield cursor
         except Exception as e:
-            self._logger.exception('Execute error: {}'.format(e))
+            self._logger.exception('Execute error: {}'.format(e), stacklevel=stacklevel)
             raise e
         finally:
             cursor.close()
             connect.close()
 
     @contextlib.contextmanager
-    def executemany(self, operation: str, *, seq_params: Union[dict, tuple, list], cursor_class: type = None) -> type:
-        self._logger.debug('Executemany operation: {}'.format(operation))
-        self._logger.debug('Executemany seq_params: {}'.format(seq_params))
+    def executemany(
+            self, operation: str,
+            *,
+            seq_params: Union[dict, tuple, list], cursor_class: type = None,
+            stacklevel: int = 4
+    ) -> type:
+        self._logger.debug('Executemany operation: {}'.format(operation), stacklevel=stacklevel)
+        self._logger.debug('Executemany seq_params: {}'.format(seq_params), stacklevel=stacklevel)
         connect = self._pool.connection()
         cursor = connect.cursor(cursorclass=cursor_class)
         try:
             cursor.executemany(operation, seq_params)
             yield cursor
         except Exception as e:
-            self._logger.exception('Executemany error: {}'.format(e))
+            self._logger.exception('Executemany error: {}'.format(e), stacklevel=stacklevel)
             raise e
         finally:
             cursor.close()
             connect.close()
 
-    def create_table(self, table: str, columns: dict, ignore: bool = True, database: str = None):
+    def create_table(self, table: str, columns_info: dict, ignore: bool = True, database: str = None):
         """
         sql = 'CREATE TABLE IF NOT EXISTS `tmp_test_script` \
               '(`a1` varchar(255) NULL, `b2` varchar(255) NULL, `c3` varchar(255) NULL);'
         rowcount = database.create_table(
             'tmp_test_script', {'a1': 'varchar(255) NULL', 'b2': 'varchar(255) NULL', 'c3': 'varchar(255) NULL'})
         """
-        keys, values = zip(*columns.items())
+        keys, values = zip(*columns_info.items())
         operation = 'CREATE TABLE {ignore}{database}{table} ({columns});'.format(
             database='{}.'.format(self._wrapper(database)) if database else '',
             ignore='IF NOT EXISTS ' if ignore else '',
             table=self._wrapper(table),
-            columns=self._placeholder_plus(keys, sy='`%s` %%s') % values)
-        with self.execute(operation) as cur:
+            columns=self._placeholder_plus(keys, sy='`%s` %%s') % values
+        )
+        with self.execute(operation, stacklevel=5) as cur:
             rowcount = cur.rowcount
         return rowcount
 
@@ -211,9 +213,9 @@ class MySQLDatabase:
         operation = 'DROP TABLE {ignore}{database}{table};'.format(
             ignore='IF EXISTS ' if ignore else '',
             database='{}.'.format(self._wrapper(database)) if database else '',
-            table=self._wrapper(table),
+            table=self._wrapper(table)
         )
-        with self.execute(operation) as cur:
+        with self.execute(operation, stacklevel=5) as cur:
             rowcount = cur.rowcount
         return rowcount
 
@@ -226,8 +228,9 @@ class MySQLDatabase:
             database='{}.'.format(self._wrapper(database)) if database else '',
             table=self._wrapper(table),
             columns=self._placeholder_plus(columns),
-            params=self._placeholder(columns))
-        with self.execute(operation, params=params) as cur:
+            params=self._placeholder(columns)
+        )
+        with self.execute(operation, params=params, stacklevel=5) as cur:
             rowcount = cur.rowcount
         return rowcount
 
@@ -240,8 +243,9 @@ class MySQLDatabase:
             database='{}.'.format(self._wrapper(database)) if database else '',
             table=self._wrapper(table),
             columns=self._placeholder_plus(columns),
-            params=self._placeholder(columns))
-        with self.executemany(operation, seq_params=seq_params) as cur:
+            params=self._placeholder(columns)
+        )
+        with self.executemany(operation, seq_params=seq_params, stacklevel=5) as cur:
             rowcount = cur.rowcount
         return rowcount
 
@@ -253,12 +257,13 @@ class MySQLDatabase:
         operator = 'DELETE FROM {database}{table} WHERE {columns};'.format(
             database='{}.'.format(self._wrapper(database)) if database else '',
             table=self._wrapper(table),
-            columns=self._placeholder_plus(columns, sy='`%s` = %%s', sp=' AND '))
-        with self.execute(operator, params=params) as cur:
+            columns=self._placeholder_plus(columns, sy='`%s` = %%s', sp=' AND ')
+        )
+        with self.execute(operator, params=params, stacklevel=5) as cur:
             rowcount = cur.rowcount
         return rowcount
 
-    def select_one(self, table: str, columns: tuple = (), params: tuple = (), database: str = None) -> iter:
+    def select_one(self, table: str, columns: tuple = (), database: str = None) -> iter:
         """
         sql = 'SELECT `a1`, `b2`, `c3` FROM `tmp_test_script`;'
         database.select_one('tmp_test_script', ('a1', 'b2', 'c3')) <-- loop it
@@ -266,16 +271,16 @@ class MySQLDatabase:
         operation = 'SELECT {columns} FROM {database}{table};'.format(
             database='{}.'.format(self._wrapper(database)) if database else '',
             table=self._wrapper(table),
-            columns=self._placeholder_plus(columns) if columns else '*')
-        with self.execute(operation, params=params or None) as cur:
+            columns=self._placeholder_plus(columns) if columns else '*'
+        )
+        with self.execute(operation, stacklevel=5) as cur:
             while True:
                 row = cur.fetchone()
                 if not row:
                     break
                 yield row
 
-    def select_many(self, table: str, columns: tuple = (), params: tuple = (), size: int = None,
-                    database: str = None) -> iter:
+    def select_many(self, table: str, columns: tuple = (), size: int = None, database: str = None) -> iter:
         """
         sql = 'SELECT `a1`, `b2`, `c3` FROM `tmp_test_script`;'
         database.select_many('tmp_test_script', ('a1', 'b2', 'c3'), size=2) <-- loop it
@@ -283,15 +288,16 @@ class MySQLDatabase:
         operation = 'SELECT {columns} FROM {database}{table};'.format(
             database='{}.'.format(self._wrapper(database)) if database else '',
             table=self._wrapper(table),
-            columns=self._placeholder_plus(columns) if columns else '*')
-        with self.execute(operation, params=params or None) as cur:
+            columns=self._placeholder_plus(columns) if columns else '*'
+        )
+        with self.execute(operation, stacklevel=5) as cur:
             while True:
                 rows = cur.fetchmany(size)
                 if not rows:
                     break
                 yield rows
 
-    def select_all(self, table: str, columns: tuple = (), params: tuple = (), database: str = None) -> list:
+    def select_all(self, table: str, columns: tuple = (), database: str = None) -> list:
         """
         sql = 'SELECT `a1`, `b2`, `c3` FROM `tmp_test_script`;'
         rows = database.select_all('tmp_test_script', ('a1', 'b2', 'c3'))
@@ -299,8 +305,9 @@ class MySQLDatabase:
         operation = 'SELECT {columns} FROM {database}{table};'.format(
             database='{}.'.format(self._wrapper(database)) if database else '',
             table=self._wrapper(table),
-            columns=self._placeholder_plus(columns) if columns else '*')
-        with self.execute(operation, params=params or None) as cur:
+            columns=self._placeholder_plus(columns) if columns else '*'
+        )
+        with self.execute(operation, stacklevel=5) as cur:
             rows = cur.fetchall()
         return rows
 
@@ -315,8 +322,9 @@ class MySQLDatabase:
             database='{}.'.format(self._wrapper(database)) if database else '',
             table=self._wrapper(table),
             values=self._placeholder_plus(keys, sy='`%s` = %%s'),
-            columns=self._placeholder_plus(columns, sy='`%s` = %%s', sp=' AND '))
-        with self.execute(operator, params=values + params) as cur:
+            columns=self._placeholder_plus(columns, sy='`%s` = %%s', sp=' AND ')
+        )
+        with self.execute(operator, params=values + params, stacklevel=5) as cur:
             rowcount = cur.rowcount
         return rowcount
 
@@ -330,7 +338,7 @@ class MySQLDatabase:
             table=self._wrapper(table),
             column=self._wrapper(column) if column else '*'
         )
-        with self.execute(operation) as cur:
+        with self.execute(operation, stacklevel=5) as cur:
             row, = cur.fetchone()
         return row
 
