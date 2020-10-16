@@ -15,7 +15,6 @@ from basic.database import *
 from basic.logger import *
 
 __all__ = [
-    'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL',
-    'Logger', 'Log', 'logger', 'log',
+    'Logger', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'WARN', 'FATAL',
     'MySQLDatabase'
 ]
