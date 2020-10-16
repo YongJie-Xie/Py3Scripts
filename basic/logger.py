@@ -20,6 +20,7 @@ from functools import wraps, partial
 from inspect import isfunction
 from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL, WARN, FATAL
 from logging.handlers import RotatingFileHandler
+from threading import Lock
 from typing import Union, Optional
 
 if sys.version_info < (3, 8):
@@ -81,6 +82,16 @@ if sys.version_info < (3, 8):
 
 
 class TintFormatter(logging.Formatter):
+    _instance_lock = Lock()
+
+    def __new__(cls, *args, **kwargs):
+        """利用内部锁实现的保证线程安全的单例设计模式，确保一个类只有一个实例存在"""
+        if not hasattr(TintFormatter, '_instance'):
+            with TintFormatter._instance_lock:
+                if not hasattr(TintFormatter, '_instance'):
+                    TintFormatter._instance = object.__new__(cls)
+        return TintFormatter._instance
+
     _ansi_colors = {
         'black': 30, 'red': 31, 'green': 32, 'yellow': 33, 'blue': 34, 'magenta': 35, 'cyan': 36, 'white': 37,
         'reset': 39, 'bright_black': 90, 'bright_red': 91, 'bright_green': 92, 'bright_yellow': 93,
