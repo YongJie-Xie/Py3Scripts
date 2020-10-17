@@ -14,9 +14,11 @@
 from basic.counter import *
 from basic.database import *
 from basic.logger import *
+from basic.variable import *
 
 __all__ = [
     'Counter',
     'Logger', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'WARN', 'FATAL',
-    'MySQLDatabase'
+    'MySQLDatabase',
+    'SyncVariable', 'GlobalSyncVariable',
 ]
