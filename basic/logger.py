@@ -20,8 +20,9 @@ from functools import wraps, partial
 from inspect import isfunction
 from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL, WARN, FATAL
 from logging.handlers import RotatingFileHandler
-from threading import Lock
 from typing import Union, Optional
+
+from basic.variable import GlobalSyncVariable
 
 if sys.version_info < (3, 8):
     import io
@@ -82,16 +83,6 @@ if sys.version_info < (3, 8):
 
 
 class TintFormatter(logging.Formatter):
-    _instance_lock = Lock()
-
-    def __new__(cls, *args, **kwargs):
-        """利用内部锁实现的保证线程安全的单例设计模式，确保一个类只有一个实例存在"""
-        if not hasattr(TintFormatter, '_instance'):
-            with TintFormatter._instance_lock:
-                if not hasattr(TintFormatter, '_instance'):
-                    TintFormatter._instance = object.__new__(cls)
-        return TintFormatter._instance
-
     _ansi_colors = {
         'black': 30, 'red': 31, 'green': 32, 'yellow': 33, 'blue': 34, 'magenta': 35, 'cyan': 36, 'white': 37,
         'reset': 39, 'bright_black': 90, 'bright_red': 91, 'bright_green': 92, 'bright_yellow': 93,
@@ -105,17 +96,30 @@ class TintFormatter(logging.Formatter):
         'CRITICAL': ('FATAL', {'fg': 'red', 'bold': True}),
     }
 
-    _full_path_mapper = {}
-    _full_path_max_length = 0
-    _thread_name_max_length = 0
-
-    def __init__(self, colour: bool = False, simplify: bool = False):
+    def __init__(self, colour: bool = False, simplify: bool = False, simplify_path: bool = False):
         if simplify:
-            super().__init__('%(datetime)s %(level)s --- %(content)s')
+            super().__init__('%(datetime)s %(level)s | %(content)s')
         else:
             super().__init__('%(datetime)s %(level)s %(pid)s --- [%(thread_name)s] %(full_path)s | %(content)s')
         self._tint = lambda text, *args, **kwargs: self._colour(text, *args, **kwargs) if colour else text
         self._simplify = simplify
+        self._simplify_path = simplify_path
+
+        class ThreadNameLength(GlobalSyncVariable):
+            def __init__(self):
+                super().__init__(0)
+
+        class FullPathLength(GlobalSyncVariable):
+            def __init__(self):
+                super().__init__(0)
+
+        class FullPathMapper(GlobalSyncVariable):
+            def __init__(self):
+                super().__init__({})
+
+        self._thread_name_length = ThreadNameLength().variable
+        self._full_path_length = FullPathLength().variable
+        self._full_path_mapper = FullPathMapper().variable
 
     def format(self, record):
         level, color = self._tint_style.get(record.levelname)
@@ -135,7 +139,7 @@ class TintFormatter(logging.Formatter):
             pid = '{process: >5}'.format(process=record.process)
             thread_name = '{thread_name: ^{length:1}}'.format(
                 thread_name=record.threadName,
-                length=self._thread_name_max_length
+                length=self._thread_name_length
             )
             full_path = self._format_path(record.pathname, record.lineno)
 
@@ -143,11 +147,11 @@ class TintFormatter(logging.Formatter):
             record.thread_name = self._tint(thread_name, fg='white', bold=True)
             record.full_path = self._tint(full_path, fg='cyan')
 
-            if len(thread_name) > self._thread_name_max_length:
-                self._thread_name_max_length = len(thread_name)
-            if len(full_path) > self._full_path_max_length:
+            if len(thread_name) > self._thread_name_length:
+                self._thread_name_length = len(thread_name)
+            if len(full_path) > self._full_path_length:
                 self._full_path_mapper.clear()
-                self._full_path_max_length = len(full_path)
+                self._full_path_length = len(full_path)
 
         if record.exc_info:
             exc_info = self.formatException(record.exc_info)
@@ -161,14 +165,18 @@ class TintFormatter(logging.Formatter):
         if key not in self._full_path_mapper.keys():
             path_array = os.path.abspath(pathname).split(os.path.sep)
             path_array[-1] += ':{}'.format(lineno)
-            while len(os.path.sep.join(path_array)) > self._full_path_max_length:
-                for i in range(1, len(path_array) - 1):
-                    if len(path_array[i]) > 1 and not path_array[i].endswith('..'):
-                        path_array[i] = '{}..'.format(path_array[i][:1])
+            if self._simplify_path:
+                path_array = path_array[-1:]
+            else:
+                while len(os.path.sep.join(path_array)) > self._full_path_length:
+                    for i in range(1, len(path_array) - 1):
+                        if len(path_array[i]) > 1 and not path_array[i].endswith('..'):
+                            path_array[i] = '{}..'.format(path_array[i][:1])
+                            break
+                    else:
                         break
-                else:
-                    break
-            self._full_path_mapper[key] = '{0: <{1}}'.format(os.path.sep.join(path_array), self._full_path_max_length)
+            full_path = '{0: <{1}}'.format(os.path.sep.join(path_array), self._full_path_length)
+            self._full_path_mapper[key] = full_path
         return self._full_path_mapper[key]
 
     def _colour(self, text,
@@ -197,7 +205,7 @@ class TintFormatter(logging.Formatter):
 
 class Logger:
     def __init__(
-            self, name: str = 'root', level: int = INFO, simplify: bool = True,
+            self, name: str = 'root', level: int = INFO, simplify: bool = True, simplify_path: bool = False,
             *,
             console: bool = True, color: bool = True, file: Union[bool, str] = False,
             file_encoding: str = 'utf-8', file_max_bytes: int = 0, file_backup_count: int = 0
@@ -209,7 +217,7 @@ class Logger:
         if console and not any(isinstance(handler, logging.StreamHandler) for handler in self._logger.handlers):
             # 配置日志输出到标准输出流
             console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(TintFormatter(color, simplify))
+            console_handler.setFormatter(TintFormatter(color, simplify, simplify_path))
             self._logger.addHandler(hdlr=console_handler)
 
         if file and not any(isinstance(handler, logging.FileHandler) for handler in self._logger.handlers):
@@ -220,7 +228,7 @@ class Logger:
                 filename = '{} {}.log'.format(time.strftime('%Y%m%d_%H%M%S', time.localtime()), name)
             file_handler = RotatingFileHandler(
                 filename, encoding=file_encoding, maxBytes=file_max_bytes, backupCount=file_backup_count)
-            file_handler.setFormatter(TintFormatter(False, simplify))
+            file_handler.setFormatter(TintFormatter(False, simplify, simplify_path))
             self._logger.addHandler(hdlr=file_handler)
 
     @property
@@ -278,6 +286,9 @@ class Logger:
         else:
             self._logger.warning(msg, *args, stacklevel=stacklevel, **kwargs)
 
+    # set alias name
+    warn = warning
+
     def error(self, msg, *args, stacklevel: int = 2, **kwargs) -> Optional[callable]:
         if traceback.extract_stack()[-2][3].startswith('@') or (args and isfunction(args[-1])):
             function = None
@@ -301,7 +312,7 @@ class Logger:
     def critical(self, msg, *args, stacklevel: int = 2, **kwargs):
         self._logger.critical(msg, *args, stacklevel=stacklevel, **kwargs)
 
-    warn = warning
+    # set alias name
     fatal = critical
 
 
