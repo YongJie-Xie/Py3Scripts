@@ -17,7 +17,7 @@ from basic.logger import *
 from basic.variable import *
 
 __all__ = [
-    'Counter',
+    'Counter', 'GlobalCounter',
     'Logger', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'WARN', 'FATAL',
     'MySQLDatabase',
     'SyncVariable', 'GlobalSyncVariable',

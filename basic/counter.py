@@ -4,43 +4,32 @@
 @Author      : YongJie-Xie
 @Contact     : fsswxyj@qq.com
 @DateTime    : 0000-00-00 00:00
-@Description : 计数器类，支持利用同步锁对数值进行顺序变更。
+@Description : 多线程同步计数类，基于多线程同步变量类实现。
 @FileName    : counter.py
 @License     : MIT License
 @ProjectName : Py3Scripts
 @Software    : PyCharm
-@Version     : 1.0
+@Version     : 1.1
 """
+from basic.variable import SyncVariable, GlobalSyncVariable
 
 
-class Counter:
-    def __init__(self, default: int = 0, is_process: bool = False):
-        if is_process:
-            from multiprocessing import Lock
-        else:
-            from threading import Lock
-        self._count = default
-        self._count_mutex = Lock()
+class Counter(SyncVariable):
+    def __init__(self, default: int = 0):
+        super().__init__(default)
 
-    @property
-    def count(self) -> int:
-        with self._count_mutex:
-            return self._count
-
-    @count.setter
-    def count(self, value: int) -> None:
-        with self._count_mutex:
-            self._count = value
-
-    def add(self, value: int = 1) -> None:
-        with self._count_mutex:
-            self._count += value
-
-    def __str__(self):
-        return str(self.count)
-
-    def __repr__(self):
-        return '<Counter(count={count})>'.format(count=self.count)
+    def increase(self, value: int = 1) -> None:
+        with self._variable_mutex:
+            self._variable += value
 
 
-__all__ = ['Counter']
+class GlobalCounter(GlobalSyncVariable):
+    def __init__(self, default: int = 0):
+        super().__init__(default)
+
+    def increase(self, value: int = 1) -> None:
+        with self._variable_mutex:
+            self._variable += value
+
+
+__all__ = ['Counter', 'GlobalCounter']
