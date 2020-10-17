@@ -18,7 +18,7 @@ from basic.variable import *
 
 __all__ = [
     'Counter', 'GlobalCounter',
-    'Logger', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'WARN', 'FATAL',
     'MySQLDatabase',
+    'Logger', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 'WARN', 'FATAL',
     'SyncVariable', 'GlobalSyncVariable',
 ]

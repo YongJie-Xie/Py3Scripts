@@ -4,7 +4,7 @@
 @Author      : YongJie-Xie
 @Contact     : fsswxyj@qq.com
 @DateTime    : 0000-00-00 00:00
-@Description : ''
+@Description : 数据库操作类的测试类
 @FileName    : test_database.py
 @License     : MIT License
 @ProjectName : Py3Scripts
@@ -16,9 +16,9 @@ from MySQLdb.cursors import SSCursor
 
 from basic import Logger, DEBUG, MySQLDatabase
 
-logger = Logger('test_database', level=DEBUG, simplify=False)
+logger = Logger('test_database', level=DEBUG)
 database = MySQLDatabase(
-    host='127.0.0.1', port=3306, username='test', password='test', database='test',
+    host='xieyongjie.cn', port=3306, username='test', password='test', database='test',
     creator=MySQLdb, cursor_class=SSCursor, logger=logger
 )
 
